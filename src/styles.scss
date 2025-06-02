@@ -1,1 +1,354 @@
-/* You can add global styles to this file, and also import other style files */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+// Import Google Fonts
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+// Styles de base
+@layer base {
+  html,
+  body {
+    @apply h-full m-0 font-sans bg-gray-50;
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  // Scroll personnalisé
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+}
+
+// Composants personnalisés SecureTalk
+@layer components {
+  // Boutons
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-500 hover:bg-primary-600 text-white focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-gray-500 hover:bg-gray-600 text-white focus:ring-gray-500;
+  }
+
+  .btn-outline {
+    @apply btn border-primary-500 text-primary-500 hover:bg-primary-500 hover:text-white focus:ring-primary-500;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-700 hover:bg-gray-100 focus:ring-gray-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-500 hover:bg-red-600 text-white focus:ring-red-500;
+  }
+
+  // Tailles de boutons
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  // Cards
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden;
+  }
+
+  .card-elevated {
+    @apply bg-white rounded-lg shadow-st-md border border-gray-200 overflow-hidden;
+  }
+
+  .card-header {
+    @apply px-6 py-4 border-b border-gray-200 bg-gray-50;
+  }
+
+  .card-body {
+    @apply p-6;
+  }
+
+  .card-footer {
+    @apply px-6 py-4 border-t border-gray-200 bg-gray-50;
+  }
+
+  // Messages
+  .message-bubble {
+    @apply max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-2xl mb-2 break-words relative;
+  }
+
+  .message-sent {
+    @apply bg-primary-500 text-white ml-auto rounded-br-sm;
+  }
+
+  .message-received {
+    @apply bg-gray-100 text-gray-900 mr-auto rounded-bl-sm;
+  }
+
+  .message-time {
+    @apply text-xs opacity-70 mt-1;
+  }
+
+  // Avatar avec statut
+  .avatar {
+    @apply relative inline-block;
+  }
+
+  .avatar-sm {
+    @apply w-8 h-8;
+  }
+
+  .avatar-md {
+    @apply w-10 h-10;
+  }
+
+  .avatar-lg {
+    @apply w-12 h-12;
+  }
+
+  .avatar-xl {
+    @apply w-16 h-16;
+  }
+
+  .avatar-status {
+    @apply absolute bottom-0 right-0 w-3 h-3 border-2 border-white rounded-full;
+  }
+
+  .avatar-status-sm {
+    @apply w-2 h-2 border;
+  }
+
+  .status-online {
+    @apply bg-online;
+  }
+
+  .status-offline {
+    @apply bg-offline;
+  }
+
+  .status-away {
+    @apply bg-away;
+  }
+
+  .status-busy {
+    @apply bg-busy;
+  }
+
+  // Forms
+  .form-group {
+    @apply mb-4;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+
+  .form-input {
+    @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 transition-colors;
+  }
+
+  .form-input-error {
+    @apply border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500;
+  }
+
+  .form-input-success {
+    @apply border-green-300 text-green-900 focus:ring-green-500 focus:border-green-500;
+  }
+
+  .form-error {
+    @apply text-sm text-red-600 mt-1;
+  }
+
+  .form-help {
+    @apply text-sm text-gray-500 mt-1;
+  }
+
+  // Navigation
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-200;
+  }
+
+  .nav-item-active {
+    @apply bg-primary-50 text-primary-700 font-medium;
+  }
+
+  // Badges
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply bg-primary-100 text-primary-800;
+  }
+
+  .badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-error {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .badge-gray {
+    @apply bg-gray-100 text-gray-800;
+  }
+
+  // Tooltips et notifications
+  .tooltip {
+    @apply absolute z-50 px-2 py-1 text-xs text-white bg-gray-900 rounded shadow-lg;
+  }
+
+  .notification {
+    @apply fixed top-4 right-4 z-50 max-w-sm p-4 bg-white rounded-lg shadow-lg border border-gray-200;
+  }
+
+  .notification-success {
+    @apply border-green-200 bg-green-50;
+  }
+
+  .notification-error {
+    @apply border-red-200 bg-red-50;
+  }
+
+  .notification-warning {
+    @apply border-yellow-200 bg-yellow-50;
+  }
+
+  .notification-info {
+    @apply border-blue-200 bg-blue-50;
+  }
+}
+
+// Utilitaires personnalisés
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(156 163 175) transparent;
+  }
+
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent;
+  }
+
+  .glass-effect {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  .shadow-inner-sm {
+    box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+
+  .shadow-inner-md {
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+  }
+
+  // Animations d'état
+  .animate-pulse-soft {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .animate-typing {
+    animation: typing 1.4s ease-in-out infinite;
+  }
+
+  // Responsive utilities
+  .container-fluid {
+    @apply w-full px-4 mx-auto;
+  }
+
+  .container-sm {
+    @apply max-w-screen-sm mx-auto px-4;
+  }
+
+  .container-md {
+    @apply max-w-screen-md mx-auto px-4;
+  }
+
+  .container-lg {
+    @apply max-w-screen-lg mx-auto px-4;
+  }
+
+  .container-xl {
+    @apply max-w-screen-xl mx-auto px-4;
+  }
+}
+
+// Animation pour l'indicateur de frappe
+.typing-indicator {
+  @apply animate-typing;
+}
+
+.typing-indicator:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+// Styles pour les composants Material Design (compatibilité)
+.mat-elevation-z2 {
+  @apply shadow-st-sm;
+}
+
+.mat-elevation-z4 {
+  @apply shadow-st-md;
+}
+
+.mat-elevation-z8 {
+  @apply shadow-st-lg;
+}
+
+// Classes pour les états de chargement
+.loading-skeleton {
+  @apply bg-gray-200 animate-pulse rounded;
+}
+
+.loading-text {
+  @apply h-4 bg-gray-200 rounded animate-pulse;
+}
+
+.loading-avatar {
+  @apply w-10 h-10 bg-gray-200 rounded-full animate-pulse;
+}

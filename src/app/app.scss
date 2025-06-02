@@ -1,0 +1,8 @@
+// Styles spécifiques au composant App
+.card {
+  transition: transform 0.2s ease-in-out;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
