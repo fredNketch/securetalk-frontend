@@ -1,9 +1,13 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MessagingService } from '../../core/services/messaging.service';
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { ConversationsListComponent } from './components/conversations-list.component';
 import { ChatWindowComponent } from './components/chat-window.component';
 import { UserInfoPanelComponent } from './components/user-info-panel.component';
+import { NewConversationModalComponent } from './components/new-conversation-modal.component';
+import { MessagingService } from '../../core/services/messaging.service';
+import { UsersService } from '../../core/services/users.service';
+import { Conversation } from '../../core/models/messaging.models';
 import { PipesModule } from '../../shared/pipes/pipes.module';
 
 @Component({
@@ -14,6 +18,7 @@ import { PipesModule } from '../../shared/pipes/pipes.module';
     ConversationsListComponent,
     ChatWindowComponent,
     UserInfoPanelComponent,
+    NewConversationModalComponent,
     PipesModule,
   ],
   template: `
@@ -22,7 +27,9 @@ import { PipesModule } from '../../shared/pipes/pipes.module';
       <div class="hidden lg:flex w-full h-full" *ngIf="!isMobile()">
         <!-- Liste des conversations -->
         <div class="w-80 bg-white border-r border-gray-200 flex-shrink-0">
-          <app-conversations-list></app-conversations-list>
+          <app-conversations-list
+            (newConversation)="startNewConversation()"
+          ></app-conversations-list>
         </div>
 
         <!-- Zone de chat principale -->
@@ -81,6 +88,7 @@ import { PipesModule } from '../../shared/pipes/pipes.module';
         <div *ngIf="mobileView() === 'conversations'" class="h-full">
           <app-conversations-list
             (conversationSelected)="onMobileConversationSelected($event)"
+            (newConversation)="startNewConversation()"
           >
           </app-conversations-list>
         </div>
@@ -95,15 +103,23 @@ import { PipesModule } from '../../shared/pipes/pipes.module';
         </div>
       </div>
     </div>
+    
+    <!-- Modal de nouvelle conversation -->
+    <app-new-conversation-modal
+      [isOpen]="showNewConversationModal()"
+      (close)="closeNewConversationModal()"
+    ></app-new-conversation-modal>
   `,
 })
 export class MessagingComponent implements OnInit {
   private readonly messagingService = inject(MessagingService);
+  private readonly usersService = inject(UsersService);
 
   // Signals pour l'état de l'interface
   readonly isMobile = signal(false); // TODO: Add BreakpointObserver
   readonly mobileView = signal<'conversations' | 'chat'>('conversations');
   readonly showUserPanel = signal(true);
+  readonly showNewConversationModal = signal(false);
 
   // Data from service
   readonly activeConversation = this.messagingService.activeConversation;
@@ -136,8 +152,15 @@ export class MessagingComponent implements OnInit {
   }
 
   startNewConversation() {
-    // TODO: Implement new conversation modal
-    console.log('Start new conversation');
+    // Charger la liste des utilisateurs avant d'ouvrir le modal
+    this.usersService.loadUsers().subscribe(() => {
+      // Ouvrir le modal de nouvelle conversation
+      this.showNewConversationModal.set(true);
+    });
+  }
+  
+  closeNewConversationModal() {
+    this.showNewConversationModal.set(false);
   }
 
   toggleUserPanel() {

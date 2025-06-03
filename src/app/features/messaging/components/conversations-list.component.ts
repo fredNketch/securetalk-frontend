@@ -1,7 +1,8 @@
-import { Component, inject, signal, output, computed } from '@angular/core';
+import { Component, inject, signal, output, computed, EventEmitter, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MessagingService } from '../../../core/services/messaging.service';
+import { UsersService } from '../../../core/services/users.service';
 import { PipesModule } from '../../../shared/pipes/pipes.module';
 import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
 import { Conversation } from '../../../core/models/messaging.models';
@@ -271,9 +272,11 @@ import { Conversation } from '../../../core/models/messaging.models';
 })
 export class ConversationsListComponent {
   private readonly messagingService = inject(MessagingService);
+  private readonly usersService = inject(UsersService);
 
   // Output events
   conversationSelected = output<Conversation>();
+  @Output() newConversation = new EventEmitter<void>();
 
   // Local state
   searchQuery = signal('');
@@ -342,7 +345,7 @@ export class ConversationsListComponent {
   }
 
   startNewConversation(): void {
-    // TODO: Implement new conversation modal
-    console.log('Start new conversation');
+    // Émettre l'événement pour que le composant parent ouvre le modal
+    this.newConversation.emit();
   }
 }
