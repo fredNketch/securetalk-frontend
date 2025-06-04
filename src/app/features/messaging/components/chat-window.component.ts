@@ -13,11 +13,25 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MessagingService } from '../../../core/services/messaging.service';
+import {
+  WebSocketService,
+  WebSocketMessage,
+} from '../../../core/services/websocket.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { MessageInputComponent } from './message-input.component';
 import { PipesModule } from '../../../shared/pipes/pipes.module';
 import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
 import { Message } from '../../../core/models/messaging.models';
+import { EncryptionStatus } from '../../../core/models/message.model';
+
+interface MessageGroup {
+  id: string;
+  senderId: number;
+  messages: Message[];
+  date: Date;
+  lastTimestamp: Date;
+  showDateSeparator: boolean;
+}
 
 @Component({
   selector: 'app-chat-window',
@@ -244,9 +258,41 @@ import { Message } from '../../../core/models/messaging.models';
                   [ngClass]="getMessageBubbleClass(message)"
                 >
                   <!-- Contenu du message -->
-                  <p class="text-sm break-words whitespace-pre-wrap">
-                    {{ message.content }}
-                  </p>
+                  <div>
+                    <!-- Message normalement déchiffré -->
+                    <p
+                      *ngIf="!hasEncryptionError(message)"
+                      class="text-sm break-words whitespace-pre-wrap"
+                    >
+                      {{ message.content }}
+                    </p>
+
+                    <!-- Message avec erreur de déchiffrement -->
+                    <div
+                      *ngIf="hasEncryptionError(message)"
+                      class="text-sm break-words whitespace-pre-wrap"
+                    >
+                      <div
+                        class="flex items-center space-x-1 text-red-500 mb-1"
+                      >
+                        <svg
+                          class="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                          ></path>
+                        </svg>
+                        <span>Message chiffré</span>
+                      </div>
+                      <p class="italic text-gray-600">{{ message.content }}</p>
+                    </div>
+                  </div>
 
                   <!-- Timestamp et statut -->
                   <div class="flex items-center justify-end space-x-1 mt-1">
@@ -436,26 +482,44 @@ export class ChatWindowComponent
   private readonly messagingService = inject(MessagingService);
   private readonly authService = inject(AuthService);
   private readonly timeAgoPipe = inject(TimeAgoPipe);
+  private readonly websocketService = inject(WebSocketService);
+  private websocketSubscription: any = null;
+
+  @ViewChild('messagesContainer') messagesContainer?: ElementRef;
 
   // Inputs et outputs
-  showBackButton = input(false);
-  backClicked = output<void>();
+  readonly showBackButton = input<boolean>(false);
+  readonly backClicked = output<void>();
 
-  // ViewChild pour le scroll automatique
-  @ViewChild('messagesContainer') messagesContainer!: ElementRef;
-
-  // Signals locaux
-  private readonly shouldScrollToBottom = signal(true);
-
-  // Data from services
+  // Signals du service
   readonly activeConversation = this.messagingService.activeConversation;
   readonly messages = this.messagingService.messages;
   readonly loading = this.messagingService.loading;
   readonly typingUsers = this.messagingService.typingUsers;
   readonly currentUser = this.authService.currentUser;
 
+  // Signals locaux
+  readonly shouldScrollToBottom = signal(false);
+
   ngOnInit() {
-    // Auto-scroll au changement de conversation
+    // Abonnement WebSocket pour messages temps réel
+    this.websocketSubscription = this.websocketService.messages$.subscribe(
+      (msg: WebSocketMessage) => {
+        if (msg.type === 'message') {
+          const activeConv = this.activeConversation();
+          // Vérifie si le message concerne la conversation active
+          if (
+            activeConv &&
+            (msg.data.senderId === activeConv.participant.id ||
+              msg.data.recipientId === activeConv.participant.id)
+          ) {
+            // Ajoute le message à la liste des messages
+            this.messagingService.addMessage(msg.data);
+            setTimeout(() => this.shouldScrollToBottom.set(true), 100);
+          }
+        }
+      },
+    );
   }
 
   ngAfterViewChecked() {
@@ -471,6 +535,10 @@ export class ChatWindowComponent
     if (conv) {
       this.messagingService.stopTyping(conv.id);
     }
+    if (this.websocketSubscription) {
+      this.websocketSubscription.unsubscribe();
+      this.websocketSubscription = null;
+    }
   }
 
   onBackClick() {
@@ -481,13 +549,27 @@ export class ChatWindowComponent
     const conversation = this.activeConversation();
     if (!conversation) return;
 
+    console.log('Envoi de message depuis ChatWindowComponent');
     this.messagingService
       .sendMessage({
         recipientId: conversation.participant.id,
         content,
       })
-      .subscribe(() => {
-        this.shouldScrollToBottom.set(true);
+      .subscribe({
+        next: (newMessage) => {
+          console.log(
+            'Message reçu dans le composant après envoi:',
+            newMessage,
+          );
+          // S'assurer que le message est bien dans la liste avant de scroller
+          setTimeout(() => this.shouldScrollToBottom.set(true), 100);
+        },
+        error: (error) => {
+          console.error(
+            "Erreur lors de l'envoi du message depuis le composant:",
+            error,
+          );
+        },
       });
   }
 
@@ -524,6 +606,17 @@ export class ChatWindowComponent
   // Helper methods
   isMyMessage(message: Message): boolean {
     return message.senderId === this.currentUser()?.id;
+  }
+
+  isReceivedMessage(message: Message): boolean {
+    return message.senderId !== this.authService.currentUser()?.id;
+  }
+
+  hasEncryptionError(message: Message): boolean {
+    return (
+      !!message.encryptionStatus &&
+      message.encryptionStatus !== EncryptionStatus.OK
+    );
   }
 
   getInitials(): string {
@@ -686,13 +779,4 @@ export class ChatWindowComponent
   trackByMessage(index: number, message: Message): number {
     return message.id;
   }
-}
-
-interface MessageGroup {
-  id: string;
-  senderId: number;
-  messages: Message[];
-  date: Date;
-  lastTimestamp: Date;
-  showDateSeparator: boolean;
 }

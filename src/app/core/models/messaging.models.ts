@@ -1,6 +1,12 @@
+import { EncryptionStatus } from './message.model';
+
 export interface Message {
   id: number;
+  conversationId?: number; // Added conversationId as optional
   content: string;
+  encryptedContent?: string;
+  initializationVector?: string;
+  encryptionStatus?: EncryptionStatus;
   senderId: number;
   recipientId: number;
   timestamp: Date;

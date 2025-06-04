@@ -1,20 +1,17 @@
-import { Injectable, signal, computed } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, of, throwError, catchError, map, tap, interval } from 'rxjs';
-import {
-  Message,
-  Conversation,
-  UserInfo,
-  SendMessageRequest,
-  TypingIndicator,
-} from '../models/messaging.models';
+import { Injectable, signal, computed, inject, OnDestroy, effect } from '@angular/core';
+import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
+import { Observable, of, throwError, catchError, map, tap, interval, Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+import { Message, Conversation, UserInfo, SendMessageRequest, TypingIndicator } from '../models/messaging.models';
 import { AuthService } from '../auth/auth.service';
 
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
-export class MessagingService {
+export class MessagingService implements OnDestroy {
   private readonly apiUrl = 'https://localhost:8443/api';
+  private http = inject(HttpClient);
+  private authService = inject(AuthService);
 
   // Signals pour l'état de la messagerie
   private readonly _conversations = signal<Conversation[]>([]);
@@ -23,6 +20,9 @@ export class MessagingService {
   private readonly _typingUsers = signal<TypingIndicator[]>([]);
   private readonly _loading = signal(false);
   private readonly _searchQuery = signal('');
+  private messageCache = new Map<number, Message[]>();
+  private conversationCache = new Map<number, Conversation>();
+  private destroy$ = new Subject<void>();
 
   // Computed values publics
   readonly conversations = this._conversations.asReadonly();
@@ -34,8 +34,8 @@ export class MessagingService {
 
   readonly unreadCount = computed(() => {
     return this._conversations().reduce(
-      (count, conv) => count + conv.unreadCount,
-      0,
+      (count, conv) => count + (conv.unreadCount || 0),
+      0
     );
   });
 
@@ -45,82 +45,109 @@ export class MessagingService {
 
     return this._conversations().filter(
       (conv) =>
-        conv.participant.username.toLowerCase().includes(query) ||
-        conv.participant.firstName?.toLowerCase().includes(query) ||
-        conv.participant.lastName?.toLowerCase().includes(query) ||
-        conv.lastMessage?.content.toLowerCase().includes(query),
+        conv.participant?.username?.toLowerCase().includes(query) ||
+        conv.participant?.firstName?.toLowerCase().includes(query) ||
+        conv.participant?.lastName?.toLowerCase().includes(query) ||
+        conv.lastMessage?.content?.toLowerCase().includes(query)
     );
   });
 
-  constructor(
-    private http: HttpClient,
-    private authService: AuthService,
-  ) {
-    // Initialiser les données réelles
+  constructor() {
+    this.initializeWebSocket();
     this.startTypingCleanup();
   }
 
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private initializeWebSocket(): void {
+    // Use effect to react to currentUser changes
+    effect(() => {
+      const user = this.authService.currentUser();
+      if (user) {
+        // Réinitialiser le cache lors d'une nouvelle connexion
+        this.messageCache.clear();
+        this.conversationCache.clear();
+      }
+    });
+  }
+
+  /**
+   * Ajoute un message à la liste des messages courants et met à jour le cache
+   */
+  public addMessage(message: Message): void {
+    const currentMessages = this._messages();
+    
+    // Vérifier si le message existe déjà pour éviter les doublons
+    if (!currentMessages.some(m => m.id === message.id)) {
+      this._messages.set([...currentMessages, message]);
+      
+      // Mettre à jour le cache des messages pour cette conversation
+      const conversationId = message.conversationId || this._activeConversation()?.id;
+      if (conversationId) {
+        const cachedMessages = this.messageCache.get(conversationId) || [];
+        this.messageCache.set(conversationId, [...cachedMessages, message]);
+        this.updateConversationLastActivity(conversationId, message.timestamp);
+      }
+    }
+  }
+  
+  /**
+   * Met à jour la dernière activité d'une conversation
+   */
+  private updateConversationLastActivity(conversationId: number, timestamp: Date): void {
+    const conversations = this._conversations();
+    const updatedConversations = conversations.map(conv => {
+      if (conv.id === conversationId) {
+        return { ...conv, lastActivity: timestamp };
+      }
+      return conv;
+    });
+    this._conversations.set(updatedConversations);
+  }
+
+  /**
+   * Récupère les options HTTP avec le token d'authentification
+   */
+  private getHttpOptions(): { headers: HttpHeaders } {
+    const token = this.authService.getToken();
+    return {
+      headers: new HttpHeaders({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      })
+    };
+  }
 
 
-  // Charger les conversations
-  loadConversations(): Observable<Conversation[]> {
+  // Charger les conversations avec mise en cache
+  loadConversations(forceRefresh: boolean = false): Observable<Conversation[]> {
+    // Retourner les données en cache si disponibles et pas de forçage du rafraîchissement
+    const cachedConversations = this._conversations();
+    if (cachedConversations.length > 0 && !forceRefresh) {
+      return of(cachedConversations);
+    }
+
     this._loading.set(true);
 
-    return this.http.get<any[]>(`${this.apiUrl}/messages/conversations`, this.getHttpOptions()).pipe(
-      map(conversationsData => {
-        // Log pour débogage
-        console.log('Données brutes des conversations reçues:', conversationsData);
-        
-        // Transformer et valider les données reçues
-        return conversationsData.map(conv => {
-          // S'assurer que toutes les propriétés requises sont présentes
-          const conversation: Conversation = {
-            id: conv.id || 0,
-            participant: {
-              id: conv.participant?.id || 0,
-              username: conv.participant?.username || 'Inconnu',
-              email: conv.participant?.email || '',
-              isOnline: conv.participant?.isOnline || false,
-              status: conv.participant?.status || 'offline'
-            },
-            unreadCount: conv.unreadCount || 0,
-            totalMessages: 0, // Valeur par défaut
-            isBlocked: false, // Valeur par défaut
-            isPinned: false,  // Valeur par défaut
-            isMuted: false,   // Valeur par défaut
-            lastActivity: conv.lastActivity ? new Date(conv.lastActivity) : new Date()
-          };
-          
-          // Ajouter le dernier message s'il existe
-          if (conv.lastMessage) {
-            conversation.lastMessage = {
-              id: conv.lastMessage.id || 0,
-              content: conv.lastMessage.content || '',
-              senderId: conv.lastMessage.senderId || 0,
-              recipientId: conv.lastMessage.recipientId || 0,
-              timestamp: conv.lastMessage.timestamp ? new Date(conv.lastMessage.timestamp) : new Date(),
-              isRead: conv.lastMessage.status === 'READ',
-              isEdited: false,
-              messageType: conv.lastMessage.messageType || 'text',
-              reactions: []
-            };
-          }
-          
-          return conversation;
+    return this.http.get<Conversation[]>(`${this.apiUrl}/messages/conversations`, this.getHttpOptions()).pipe(
+      map(conversations => {
+        // Mettre à jour le cache des conversations
+        conversations.forEach(conv => {
+          this.conversationCache.set(conv.id, conv);
         });
+        return conversations;
       }),
       tap(conversations => {
-        console.log('Conversations transformées:', conversations);
         this._conversations.set(conversations);
         this._loading.set(false);
       }),
-      catchError(error => {
-        this._loading.set(false);
+      catchError((error: HttpErrorResponse) => {
         console.error('Erreur lors du chargement des conversations:', error);
-        console.error('Détails de l\'erreur:', error.error);
-        // Retourner un tableau vide plutôt que de lancer une erreur
-        // pour éviter de bloquer l'interface utilisateur
-        return of([]);
+        this._loading.set(false);
+        return throwError(() => new Error('Impossible de charger les conversations'));
       })
     );
   }
@@ -215,9 +242,9 @@ export class MessagingService {
 
     // Logs de débogage
     console.log('Envoi de message:', JSON.stringify(messageRequest));
-    console.log('Headers:', this.getHttpOptions());
 
-    return this.http.post<any>(`${this.apiUrl}/messages`, messageRequest, this.getHttpOptions()).pipe(
+    // Ajouter explicitement les headers d'authentification
+    return this.http.post<any>(`${this.apiUrl}/messages`, messageRequest, this.authService.getHttpOptions()).pipe(
       tap(response => {
         console.log('Réponse du serveur après envoi:', response);
       }),
@@ -373,7 +400,7 @@ export class MessagingService {
       ),
     );
 
-    // Appel API pour mettre à jour côté serveur
+    // Appel API pour mettre à jour côté serveur avec les bons headers d'authentification
     this.http.put(`${this.apiUrl}/messages/conversation/${conversationId}/read`, {}, this.getHttpOptions())
       .pipe(
         catchError(error => {
@@ -415,24 +442,13 @@ export class MessagingService {
 
   // Nettoyage des indicateurs de frappe expirés
   private startTypingCleanup(): void {
-    interval(5000).subscribe(() => {
-      const now = new Date();
-      this._typingUsers.update((users) =>
-        users.filter((user) => now.getTime() - user.timestamp.getTime() < 5000),
-      );
-    });
-  }
-
-  /**
-   * Obtient les en-têtes HTTP avec le token JWT
-   */
-  private getHttpOptions() {
-    const token = this.authService.getToken();
-    return {
-      headers: new HttpHeaders({
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      })
-    };
+    interval(5000)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        const now = new Date();
+        this._typingUsers.update((users) =>
+          users.filter((user) => now.getTime() - user.timestamp.getTime() < 5000)
+        );
+      });
   }
 }

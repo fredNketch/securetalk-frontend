@@ -85,7 +85,7 @@ export class UsersService {
     this._loading.set(true);
 
     // Récupérer tous les utilisateurs sauf l'utilisateur courant
-    return this.http.get<User[]>(`${this.apiUrl}/users`).pipe(
+    return this.http.get<User[]>(`${this.apiUrl}/users`, this.getHttpOptions()).pipe(
       map(users => {
         // Filtrer l'utilisateur courant
         const currentUser = this.authService.currentUser();
